@@ -1,0 +1,6 @@
+.git
+.env
+.env.*
+*.exe
+*.test
+coverage.out

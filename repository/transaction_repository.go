@@ -49,6 +49,35 @@ func (tr *TransactionRepository) GetTransactions() ([]model.Transaction, error) 
 	return transactionList, nil
 }
 
+func (tr *TransactionRepository) GetTransactionById(id_transaction int) (*model.Transaction, error) {
+	query, err := tr.connection.Prepare("SELECT * FROM transaction WHERE id = $1")
+	if err != nil {
+		fmt.Println("Error preparing query:", err)
+		return nil, err
+	}
+
+	var transaction model.Transaction
+	err = query.QueryRow(id_transaction).Scan(
+		&transaction.ID,
+		&transaction.Description,
+		&transaction.Amount,
+		&transaction.Type,
+		&transaction.Category,
+		&transaction.Date,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("transaction not found")
+		}
+
+		return nil, fmt.Errorf("error executing query: %v", err)
+	}
+
+	query.Close()
+	return &transaction, nil
+}
+
 func (tr *TransactionRepository) CreateTransaction(transaction model.Transaction) (int, error) {
 
 	var id int

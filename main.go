@@ -31,7 +31,8 @@ func main() {
 			"message": "pong",
 		})
 	})
-	router.POST("/transaction", transactionController.CreateTransaction)
+	router.POST("/transactions", transactionController.CreateTransaction)
 	router.GET("/transactions", transactionController.GetTransactions)
+	router.GET("/transactions/:transactionId", transactionController.GetTransactionsById)
 	router.Run() // listens on 0.0.0.0:8080 by default
 }

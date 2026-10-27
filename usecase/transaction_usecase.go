@@ -31,3 +31,11 @@ func (tu *TransactionUsecase) CreateTransaction(transaction model.Transaction) (
 	transaction.ID = transactionId
 	return transaction, nil
 }
+
+func (tu *TransactionUsecase) GetTransactionById(id_transaction int) (*model.Transaction, error) {
+	product, err := tu.repository.GetTransactionById(id_transaction)
+	if err != nil {
+		return nil, err
+	}
+	return product, nil
+}

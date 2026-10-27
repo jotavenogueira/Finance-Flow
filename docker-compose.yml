@@ -1,4 +1,25 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.yml
+    restart: unless-stopped
+    environment:
+      GIN_MODE: release
+      PORT: "8080"
+      # Entre containers, use o nome do servico e a porta interna.
+      DB_HOST: go_db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no .env ou no ambiente}
+      DB_NAME: ${DB_NAME:-postgres}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+    ports:
+      - "127.0.0.1:${API_PORT:-8081}:8080"
+    depends_on:
+      go_db:
+        condition: service_healthy
+
   go_db:
     container_name: go_db
     image: postgres:18.6
