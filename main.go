@@ -34,5 +34,6 @@ func main() {
 	router.POST("/transactions", transactionController.CreateTransaction)
 	router.GET("/transactions", transactionController.GetTransactions)
 	router.GET("/transactions/:transactionId", transactionController.GetTransactionsById)
+	router.DELETE("/transactions/:transactionId", transactionController.DeleteTransaction)
 	router.Run() // listens on 0.0.0.0:8080 by default
 }

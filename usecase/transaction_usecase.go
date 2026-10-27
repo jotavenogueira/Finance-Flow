@@ -33,9 +33,17 @@ func (tu *TransactionUsecase) CreateTransaction(transaction model.Transaction) (
 }
 
 func (tu *TransactionUsecase) GetTransactionById(id_transaction int) (*model.Transaction, error) {
-	product, err := tu.repository.GetTransactionById(id_transaction)
+	transaction, err := tu.repository.GetTransactionById(id_transaction)
 	if err != nil {
 		return nil, err
 	}
-	return product, nil
+	return transaction, nil
+}
+
+func (tu *TransactionUsecase) DeleteTransaction(id_transaction int) error {
+	err := tu.repository.DeleteTransaction(id_transaction)
+	if err != nil {
+		return err
+	}
+	return nil
 }

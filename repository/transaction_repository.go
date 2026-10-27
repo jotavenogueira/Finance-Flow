@@ -100,3 +100,30 @@ func (tr *TransactionRepository) CreateTransaction(transaction model.Transaction
 	query.Close()
 	return id, nil
 }
+
+func (tr *TransactionRepository) DeleteTransaction(id_transaction int) error {
+
+	query, err := tr.connection.Prepare(
+		"DELETE FROM transaction WHERE id = $1",
+	)
+	if err != nil {
+		return fmt.Errorf("error preparing query: %w", err)
+	}
+	defer query.Close()
+
+	resultado, err := query.Exec(id_transaction)
+	if err != nil {
+		return fmt.Errorf("error executing query: %w", err)
+	}
+
+	quantidade, err := resultado.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error checking affected rows: %w", err)
+	}
+
+	if quantidade == 0 {
+		return fmt.Errorf("transaction not found")
+	}
+
+	return nil
+}

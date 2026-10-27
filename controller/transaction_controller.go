@@ -58,7 +58,7 @@ func (t *transactionController) GetTransactionsById(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response)
 		return
 	}
-	productId, err := strconv.Atoi(id)
+	transactionId, err := strconv.Atoi(id)
 	if err != nil {
 		response := model.Response{
 			Message: "ID must be a number",
@@ -67,13 +67,13 @@ func (t *transactionController) GetTransactionsById(c *gin.Context) {
 		return
 	}
 
-	transactions, err := t.transactionUsecase.GetTransactionById(productId)
+	transaction, err := t.transactionUsecase.GetTransactionById(transactionId)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 	}
 
-	if transactions == nil {
+	if transaction == nil {
 		response := model.Response{
 			Message: "Transaction not found",
 		}
@@ -81,5 +81,35 @@ func (t *transactionController) GetTransactionsById(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, transactions)
+	c.JSON(http.StatusOK, transaction)
+}
+
+func (t *transactionController) DeleteTransaction(c *gin.Context) {
+	id := c.Param("transactionId")
+
+	if id == "" {
+		response := model.Response{
+			Message: "Transaction ID is required",
+		}
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	transactionId, err := strconv.Atoi(id)
+	if err != nil || transactionId <= 0 {
+		c.JSON(http.StatusBadRequest, model.Response{
+			Message: "ID must be a positive integer",
+		})
+		return
+	}
+
+	err = t.transactionUsecase.DeleteTransaction(transactionId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.Response{
+			Message: "Error deleting transaction",
+		})
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
