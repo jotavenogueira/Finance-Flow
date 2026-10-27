@@ -1,0 +1,9 @@
+# Configuracao local e credenciais
+.env
+.env.*
+!.env.example
+
+# Arquivos gerados pelo Go no desenvolvimento
+*.exe
+*.test
+coverage.out
