@@ -14,7 +14,7 @@ import (
 
 // A tela acompanha o binário, inclusive na imagem Docker sem fontes.
 //
-//go:embed web/index.html web/app.js web/style.css
+//go:embed web/index.html web/app.js web/dashboard.js web/style.css
 var webFiles embed.FS
 
 func NewHandler(connection *sql.DB) http.Handler {
@@ -30,9 +30,10 @@ func NewHandler(connection *sql.DB) http.Handler {
 		c.Next()
 	})
 	assets := map[string]struct{ file, contentType string }{
-		"/":                 {"web/index.html", "text/html; charset=utf-8"},
-		"/static/app.js":    {"web/app.js", "text/javascript; charset=utf-8"},
-		"/static/style.css": {"web/style.css", "text/css; charset=utf-8"},
+		"/":                    {"web/index.html", "text/html; charset=utf-8"},
+		"/static/dashboard.js": {"web/dashboard.js", "text/javascript; charset=utf-8"},
+		"/static/app.js":       {"web/app.js", "text/javascript; charset=utf-8"},
+		"/static/style.css":    {"web/style.css", "text/css; charset=utf-8"},
 	}
 	for path, asset := range assets {
 		data, err := webFiles.ReadFile(asset.file)

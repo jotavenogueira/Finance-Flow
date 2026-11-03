@@ -6,7 +6,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o /out/financeflow .
+# A API usa JSON; MsgPack fica fora da compilação para reduzir dependências.
+RUN CGO_ENABLED=0 GOMAXPROCS=1 GOMEMLIMIT=384MiB go build -p 1 -tags=nomsgpack -trimpath -o /out/financeflow .
 
 # Etapa 2: executar apenas o programa compilado.
 FROM scratch
