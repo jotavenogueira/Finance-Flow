@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
-  <title>FinanceFlow — teste de conta e transações</title>
+  <meta name="color-scheme" content="dark">
+  <title>FinanceFlow — suas finanças em perspectiva</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/dashboard.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="/" aria-label="FinanceFlow, início"><span class="brand-mark" aria-hidden="true">F</span>FinanceFlow</a>
-    <span class="prototype-label">Protótipo de testes</span>
+    <span class="prototype-label">Finanças pessoais</span>
   </header>
 
   <main class="shell">
@@ -21,8 +22,8 @@
     <section id="auth-panel" class="auth-layout" aria-labelledby="auth-heading" hidden>
       <div class="intro">
         <span class="eyebrow">Seu espaço financeiro</span>
-        <h1>Uma conta. <br>Suas categorias. <br>Suas transações.</h1>
-        <p>Entre ou crie uma conta para testar seu controle financeiro. Cadastre uma categoria e registre sua primeira movimentação.</p>
+        <h1>Seu dinheiro, <br>com mais <br>clareza.</h1>
+        <p>Acompanhe suas receitas, entenda seus gastos e veja como seu saldo evolui. Tudo em um só lugar.</p>
         <p class="intro-note">Cada pessoa acessa apenas seus próprios dados.</p>
       </div>
       <div class="card auth-card">
@@ -57,10 +58,36 @@
       <div class="workspace-header">
         <div>
           <span class="eyebrow">Minha conta</span>
-          <h1 id="workspace-heading">Seu FinanceFlow</h1>
+          <h1 id="workspace-heading">Visão geral</h1>
           <p class="muted"><span id="user-name"></span> <span class="separator" aria-hidden="true">·</span> <span id="user-email"></span></p>
         </div>
         <button id="logout-button" class="button secondary" type="button">Sair da conta</button>
+      </div>
+
+      <section class="card dashboard-filters" aria-labelledby="filters-heading">
+        <div class="filter-heading"><div><span class="eyebrow">Seu panorama</span><h2 id="filters-heading">Explore suas finanças</h2></div><button id="reset-filters" class="button quiet" type="button">Limpar filtros</button></div>
+        <div class="filter-grid">
+          <div class="field"><label for="filter-period">Período</label><select id="filter-period"><option value="month">Um mês</option><option value="six">Últimos 6 meses</option><option value="all">Todo o histórico</option></select></div>
+          <div class="field"><label for="filter-month">Mês de referência</label><input id="filter-month" type="month" required aria-describedby="month-help"><span id="month-help" class="field-help">Selecione o mês que deseja analisar.</span></div>
+          <div class="field"><label for="filter-type">Tipo</label><select id="filter-type"><option value="">Receitas e despesas</option><option value="income">Receitas</option><option value="expense">Despesas</option></select></div>
+          <div class="field"><label for="filter-category">Categoria</label><select id="filter-category"><option value="">Todas as categorias</option></select></div>
+          <div class="field search-field"><label for="filter-search">Buscar movimentações</label><input id="filter-search" type="search" maxlength="200" placeholder="Descrição ou categoria" autocomplete="off"></div>
+        </div>
+        <p id="filter-context" class="field-help" role="status" aria-live="polite"></p>
+      </section>
+      <section class="summary-grid" aria-label="Resumo das movimentações filtradas">
+        <article class="summary-card balance-card"><span>Saldo do período</span><strong id="summary-balance">—</strong><p>Receitas menos despesas dos filtros selecionados.</p></article>
+        <article class="summary-card"><span class="income">↗ Receitas</span><strong id="summary-income">—</strong><p>Entradas registradas no período.</p></article>
+        <article class="summary-card"><span class="expense">↘ Despesas</span><strong id="summary-expense">—</strong><p>Saídas registradas no período.</p></article>
+      </section>
+      <div class="charts-grid">
+        <section class="card chart-card" aria-labelledby="evolution-heading">
+          <div class="chart-heading"><div><span class="eyebrow">Entradas e saídas</span><h2 id="evolution-heading">Evolução diária</h2></div><div class="chart-legend"><span class="legend-income">Receitas</span><span class="legend-expense">Despesas</span></div></div>
+          <p id="evolution-empty" class="chart-empty" hidden>Nenhuma movimentação corresponde aos filtros. Ajuste o período ou registre sua primeira transação.</p>
+          <div id="evolution-chart" class="chart-scroll"></div>
+          <details id="evolution-details"><summary>Ver valores do gráfico em tabela</summary><div class="chart-scroll"><table class="chart-table"><caption id="evolution-caption">Valores do período filtrado</caption><thead><tr><th scope="col">Data</th><th scope="col">Receitas</th><th scope="col">Despesas</th><th scope="col">Saldo</th></tr></thead><tbody id="evolution-table"></tbody></table></div></details>
+        </section>
+        <section class="card chart-card" aria-labelledby="breakdown-heading"><span class="eyebrow">Para onde foi</span><h2 id="breakdown-heading">Despesas por categoria</h2><p id="breakdown-total" class="muted">Distribuição das despesas filtradas.</p><p id="breakdown-empty" class="chart-empty">Nenhuma despesa neste período.</p><ul id="category-breakdown" class="category-breakdown"></ul></section>
       </div>
 
       <div class="workspace-grid">
@@ -112,11 +139,11 @@
 
         <section class="card history-card" aria-labelledby="history-heading">
           <div class="history-header">
-            <div><h2 id="history-heading">Suas transações</h2><p id="transaction-count" class="muted">Nenhuma transação cadastrada.</p></div>
+            <div><h2 id="history-heading">Movimentações</h2><p id="transaction-count" class="muted">Nenhuma transação cadastrada.</p></div>
             <button id="refresh-button" class="button quiet" type="button">Atualizar</button>
           </div>
           <p id="workspace-loading" class="loading" role="status" hidden>Carregando seus dados…</p>
-          <div id="transactions-empty" class="empty-state"><span aria-hidden="true">↗</span><h3>Seu histórico começa aqui</h3><p>Depois de criar uma categoria, registre uma receita ou despesa no formulário ao lado.</p></div>
+          <div id="transactions-empty" class="empty-state"><span aria-hidden="true">↗</span><h3 id="history-empty-heading">Seu histórico começa aqui</h3><p id="history-empty-text">Depois de criar uma categoria, registre uma receita ou despesa no formulário ao lado.</p></div>
           <ul id="transaction-list" class="transaction-list" aria-label="Transações cadastradas"></ul>
           <section id="transaction-detail" class="detail-panel" aria-labelledby="detail-heading" tabindex="-1" hidden>
             <div class="history-header"><h3 id="detail-heading">Detalhes da transação</h3><button id="close-detail" class="button quiet" type="button">Fechar</button></div>
@@ -126,6 +153,6 @@
       </div>
     </section>
   </main>
-  <footer>FinanceFlow · Ambiente local para testar cadastro, categorias e transações.</footer>
+  <footer>FinanceFlow · Clareza para cuidar do seu dinheiro.</footer>
 </body>
 </html>
