@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jotavenogueira/Finance-Flow/model"
-	"github.com/lib/pq"
 )
 
 type AuthRepository struct {
@@ -25,8 +24,8 @@ func (r AuthRepository) CreateUser(ctx context.Context, user model.User) (model.
 		RETURNING id, name, email`, user.Name, user.Email, user.PasswordHash).
 		Scan(&user.ID, &user.Name, &user.Email)
 	if err != nil {
-		var databaseError *pq.Error
-		if errors.As(err, &databaseError) && databaseError.Code == "23505" {
+		var databaseError interface{ SQLState() string }
+		if errors.As(err, &databaseError) && databaseError.SQLState() == "23505" {
 			return model.User{}, model.ErrConflict
 		}
 		return model.User{}, fmt.Errorf("create user: %w", err)

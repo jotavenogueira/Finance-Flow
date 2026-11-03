@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jotavenogueira/Finance-Flow/model"
-	"github.com/lib/pq"
 )
 
 type CategoryRepository struct {
@@ -45,8 +44,8 @@ func (cr *CategoryRepository) CreateCategory(userID int, name string) (model.Cat
 	err := cr.connection.QueryRow(
 		"INSERT INTO categories (user_id, name) VALUES ($1, $2) RETURNING id, name", userID, name,
 	).Scan(&category.ID, &category.Name)
-	var postgresError *pq.Error
-	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+	var postgresError interface{ SQLState() string }
+	if errors.As(err, &postgresError) && postgresError.SQLState() == "23505" {
 		return model.Category{}, model.ErrConflict
 	}
 	if err != nil {

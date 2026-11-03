@@ -140,3 +140,25 @@ https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-tags
 
 Validação: testes de cálculos e interface simulada, testes Go com nomsgpack
 e prévia visual com dados fictícios. O teste com PostgreSQL não foi executado.
+## Hospedagem na Vercel
+
+O preset Go executa este mesmo servidor e os arquivos da interface continuam
+embutidos no binario. O arquivo `vercel.json` configura o preset, a compilacao
+JSON (`nomsgpack`), cookies HTTPS e a regiao de Sao Paulo (`gru1`). O PostgreSQL
+online deve ficar na mesma regiao. O Docker Compose continua sendo o ambiente local.
+
+A integracao Neon fornece `DATABASE_URL` ao projeto como segredo. Essa URL tem
+prioridade sobre as seis variaveis `DB_*`. Quando nao existe, a conexao local
+continua usando o `.env` atual. Nao coloque a URL real no Git nem em arquivos publicos.
+
+O driver pgx aceita a autenticacao `channel_binding=require` fornecida pelo Neon.
+A API mantem esse requisito e usa `sslmode=verify-full`, validando o certificado
+e o nome do servidor. O pool de cada instancia e limitado a cinco conexoes, com
+duas ociosas, para uso junto ao pooler do provedor.
+
+No primeiro acesso, as migracoes preparam o banco online vazio. Dados do Docker
+local nao sao enviados automaticamente. Cada ambiente deve ter sua propria
+conexao; o banco configurado nesta publicacao foi ligado apenas a Production.
+
+Confira na Vercel a branch de producao antes de publicar novos commits. O deploy
+deste projeto acompanha a branch main.

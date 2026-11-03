@@ -31,7 +31,7 @@ func TestUserIsolationFlow(t *testing.T) {
 	if err != nil || !strings.HasPrefix(strings.TrimPrefix(parsed.Path, "/"), "financeflow_test_") {
 		t.Fatal("o teste exige um banco descartável financeflow_test_*")
 	}
-	connection, err := sql.Open("postgres", dsn)
+	connection, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatal(err)
 	}

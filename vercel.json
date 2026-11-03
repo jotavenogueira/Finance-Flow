@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "go",
+  "regions": ["gru1"],
+  "build": {
+    "env": {
+      "GO_BUILD_FLAGS": "-tags=nomsgpack"
+    }
+  },
+  "env": {
+    "GIN_MODE": "release",
+    "SESSION_COOKIE_SECURE": "true"
+  }
+}
