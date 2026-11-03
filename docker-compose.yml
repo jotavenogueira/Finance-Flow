@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     environment:
       GIN_MODE: release
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       PORT: "8080"
       # Entre containers, use o nome do servico e a porta interna.
       DB_HOST: go_db

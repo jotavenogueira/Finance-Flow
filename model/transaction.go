@@ -5,6 +5,7 @@ type Transaction struct {
 	Description string          `json:"description"`
 	Amount      float64         `json:"amount"`
 	Type        TransactionType `json:"type"`
-	Category    Category        `json:"category"`
+	CategoryID  int             `json:"category_id"`
+	Category    string          `json:"category"`
 	Date        string          `json:"date"`
 }

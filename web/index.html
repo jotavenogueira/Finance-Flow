@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>FinanceFlow — teste de conta e transações</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="FinanceFlow, início"><span class="brand-mark" aria-hidden="true">F</span>FinanceFlow</a>
+    <span class="prototype-label">Protótipo de testes</span>
+  </header>
+
+  <main class="shell">
+    <div id="notice" class="notice" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+    <p id="initial-loading" class="loading" role="status">Verificando sua sessão…</p>
+
+    <section id="auth-panel" class="auth-layout" aria-labelledby="auth-heading" hidden>
+      <div class="intro">
+        <span class="eyebrow">Seu espaço financeiro</span>
+        <h1>Uma conta. <br>Suas categorias. <br>Suas transações.</h1>
+        <p>Entre ou crie uma conta para testar seu controle financeiro. Cadastre uma categoria e registre sua primeira movimentação.</p>
+        <p class="intro-note">Cada pessoa acessa apenas seus próprios dados.</p>
+      </div>
+      <div class="card auth-card">
+        <div class="tabs" role="tablist" aria-label="Acesso à conta">
+          <button id="login-tab" type="button" role="tab" aria-selected="true" aria-controls="auth-fields" tabindex="0">Entrar</button>
+          <button id="register-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-fields" tabindex="-1">Criar conta</button>
+        </div>
+        <div id="auth-fields" role="tabpanel" aria-labelledby="login-tab">
+          <h2 id="auth-heading">Bem-vindo de volta</h2>
+          <p id="auth-help" class="muted">Use seu e-mail e sua senha para entrar.</p>
+          <form id="auth-form">
+            <div id="name-field" class="field" hidden>
+              <label for="auth-name">Nome</label>
+              <input id="auth-name" name="name" autocomplete="name" maxlength="100" placeholder="Como podemos te chamar?">
+            </div>
+            <div class="field">
+              <label for="auth-email">E-mail</label>
+              <input id="auth-email" name="email" type="email" autocomplete="username" maxlength="254" placeholder="voce@exemplo.com" required>
+            </div>
+            <div class="field">
+              <label for="auth-password">Senha</label>
+              <input id="auth-password" name="password" type="password" autocomplete="current-password" required aria-describedby="password-help">
+              <span id="password-help" class="field-help">A senha da sua conta FinanceFlow.</span>
+            </div>
+            <button id="auth-submit" class="button primary full" type="submit">Entrar</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="app-panel" aria-labelledby="workspace-heading" hidden>
+      <div class="workspace-header">
+        <div>
+          <span class="eyebrow">Minha conta</span>
+          <h1 id="workspace-heading">Seu FinanceFlow</h1>
+          <p class="muted"><span id="user-name"></span> <span class="separator" aria-hidden="true">·</span> <span id="user-email"></span></p>
+        </div>
+        <button id="logout-button" class="button secondary" type="button">Sair da conta</button>
+      </div>
+
+      <div class="workspace-grid">
+        <div class="forms-column">
+          <section class="card" aria-labelledby="categories-heading">
+            <div class="section-title"><span class="step" aria-hidden="true">1</span><h2 id="categories-heading">Suas categorias</h2></div>
+            <p class="muted">Crie os nomes que fazem sentido para você.</p>
+            <form id="category-form">
+              <div class="field">
+                <label for="category-name">Nome da categoria</label>
+                <input id="category-name" name="name" maxlength="100" required placeholder="Ex.: Academia, Pets ou Faculdade">
+              </div>
+              <button id="category-submit" class="button secondary full" type="submit">Criar categoria</button>
+            </form>
+            <p id="categories-empty" class="field-help">Você ainda não criou nenhuma categoria.</p>
+            <ul id="category-list" class="category-list" aria-label="Categorias cadastradas"></ul>
+          </section>
+
+          <section class="card" aria-labelledby="new-transaction-heading">
+            <div class="section-title"><span class="step" aria-hidden="true">2</span><h2 id="new-transaction-heading">Nova transação</h2></div>
+            <form id="transaction-form">
+              <div class="field">
+                <label for="transaction-description">Descrição</label>
+                <input id="transaction-description" name="description" maxlength="200" required placeholder="Ex.: Mensalidade da academia">
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="transaction-amount">Valor (R$)</label>
+                  <input id="transaction-amount" name="amount" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" placeholder="0,00" required>
+                </div>
+                <div class="field">
+                  <label for="transaction-type">Tipo</label>
+                  <select id="transaction-type" name="type" required><option value="expense">Despesa</option><option value="income">Receita</option></select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="transaction-category">Categoria</label>
+                <select id="transaction-category" name="category_id" required disabled aria-describedby="category-hint"><option value="">Crie uma categoria primeiro</option></select>
+                <span id="category-hint" class="field-help">Use o formulário acima para criar sua primeira categoria.</span>
+              </div>
+              <div class="field">
+                <label for="transaction-date">Data</label>
+                <input id="transaction-date" name="date" type="date" required>
+              </div>
+              <button id="transaction-submit" class="button primary full" type="submit" disabled>Salvar transação</button>
+            </form>
+          </section>
+        </div>
+
+        <section class="card history-card" aria-labelledby="history-heading">
+          <div class="history-header">
+            <div><h2 id="history-heading">Suas transações</h2><p id="transaction-count" class="muted">Nenhuma transação cadastrada.</p></div>
+            <button id="refresh-button" class="button quiet" type="button">Atualizar</button>
+          </div>
+          <p id="workspace-loading" class="loading" role="status" hidden>Carregando seus dados…</p>
+          <div id="transactions-empty" class="empty-state"><span aria-hidden="true">↗</span><h3>Seu histórico começa aqui</h3><p>Depois de criar uma categoria, registre uma receita ou despesa no formulário ao lado.</p></div>
+          <ul id="transaction-list" class="transaction-list" aria-label="Transações cadastradas"></ul>
+          <section id="transaction-detail" class="detail-panel" aria-labelledby="detail-heading" tabindex="-1" hidden>
+            <div class="history-header"><h3 id="detail-heading">Detalhes da transação</h3><button id="close-detail" class="button quiet" type="button">Fechar</button></div>
+            <dl id="detail-fields"></dl>
+          </section>
+        </section>
+      </div>
+    </section>
+  </main>
+  <footer>FinanceFlow · Ambiente local para testar cadastro, categorias e transações.</footer>
+</body>
+</html>

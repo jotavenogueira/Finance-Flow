@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -9,107 +10,82 @@ import (
 	"github.com/jotavenogueira/Finance-Flow/usecase"
 )
 
-type transactionController struct {
+type TransactionController struct {
 	transactionUsecase usecase.TransactionUsecase
 }
 
-func NewTransactionController(usecase usecase.TransactionUsecase) transactionController {
-	return transactionController{
-		transactionUsecase: usecase,
-	}
+func NewTransactionController(transactionUsecase usecase.TransactionUsecase) TransactionController {
+	return TransactionController{transactionUsecase: transactionUsecase}
 }
 
-func (t *transactionController) GetTransactions(c *gin.Context) {
-	transactions, err := t.transactionUsecase.GetTransactions()
+type createTransactionRequest struct {
+	Description string                `json:"description"`
+	Amount      float64               `json:"amount"`
+	Type        model.TransactionType `json:"type"`
+	CategoryID  int                   `json:"category_id"`
+	Date        string                `json:"date"`
+}
 
+func (t *TransactionController) GetTransactions(c *gin.Context) {
+	transactions, err := t.transactionUsecase.GetTransactions(CurrentUserID(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		respondError(c, err)
+		return
 	}
-
 	c.JSON(http.StatusOK, transactions)
 }
 
-func (t *transactionController) CreateTransaction(c *gin.Context) {
-
-	var transaction model.Transaction
-	err := c.BindJSON(&transaction)
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, err)
+func (t *TransactionController) CreateTransaction(c *gin.Context) {
+	var request createTransactionRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondError(c, model.ErrInvalidInput)
 		return
 	}
-
-	insertedTransaction, err := t.transactionUsecase.CreateTransaction(transaction)
+	transaction, err := t.transactionUsecase.CreateTransaction(CurrentUserID(c), model.Transaction{
+		Description: request.Description,
+		Amount:      request.Amount,
+		Type:        request.Type,
+		CategoryID:  request.CategoryID,
+		Date:        request.Date,
+	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
+		respondError(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, insertedTransaction)
+	c.JSON(http.StatusCreated, transaction)
 }
 
-func (t *transactionController) GetTransactionsById(c *gin.Context) {
-
-	id := c.Param("transactionId")
-	if id == "" {
-		response := model.Response{
-			Message: "Transaction ID is required",
-		}
-		c.JSON(http.StatusBadRequest, response)
-		return
-	}
-	transactionId, err := strconv.Atoi(id)
+func (t *TransactionController) GetTransactionsById(c *gin.Context) {
+	transactionID, err := parseTransactionID(c)
 	if err != nil {
-		response := model.Response{
-			Message: "ID must be a number",
-		}
-		c.JSON(http.StatusBadRequest, response)
+		respondError(c, err)
 		return
 	}
-
-	transaction, err := t.transactionUsecase.GetTransactionById(transactionId)
-
+	transaction, err := t.transactionUsecase.GetTransactionById(CurrentUserID(c), transactionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-	}
-
-	if transaction == nil {
-		response := model.Response{
-			Message: "Transaction not found",
-		}
-		c.JSON(http.StatusNotFound, response)
+		respondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, transaction)
 }
 
-func (t *transactionController) DeleteTransaction(c *gin.Context) {
-	id := c.Param("transactionId")
-
-	if id == "" {
-		response := model.Response{
-			Message: "Transaction ID is required",
-		}
-		c.JSON(http.StatusBadRequest, response)
-		return
-	}
-
-	transactionId, err := strconv.Atoi(id)
-	if err != nil || transactionId <= 0 {
-		c.JSON(http.StatusBadRequest, model.Response{
-			Message: "ID must be a positive integer",
-		})
-		return
-	}
-
-	err = t.transactionUsecase.DeleteTransaction(transactionId)
+func (t *TransactionController) DeleteTransaction(c *gin.Context) {
+	transactionID, err := parseTransactionID(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, model.Response{
-			Message: "Error deleting transaction",
-		})
+		respondError(c, err)
 		return
 	}
+	if err := t.transactionUsecase.DeleteTransaction(CurrentUserID(c), transactionID); err != nil {
+		respondError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
 
-	c.Status(http.StatusOK)
+func parseTransactionID(c *gin.Context) (int, error) {
+	id, err := strconv.Atoi(c.Param("transactionId"))
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("%w: transaction ID must be a positive integer", model.ErrInvalidInput)
+	}
+	return id, nil
 }

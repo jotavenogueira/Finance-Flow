@@ -1,14 +1,13 @@
 package main
 
 import (
+	"log"
+	"net/http"
 	"os"
+	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"github.com/jotavenogueira/Finance-Flow/controller"
 	"github.com/jotavenogueira/Finance-Flow/db"
-	"github.com/jotavenogueira/Finance-Flow/repository"
-	"github.com/jotavenogueira/Finance-Flow/usecase"
 )
 
 func main() {
@@ -16,24 +15,28 @@ func main() {
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		panic(err)
 	}
-	router := gin.Default()
-
 	dbConnection, err := db.ConnectDB()
 	if err != nil {
 		panic(err)
 	}
-	transactionRepository := repository.NewTransactionRepository(dbConnection)
-	transactionUsecase := usecase.NewTrasactionUseCase(transactionRepository)
-	transactionController := controller.NewTransactionController(transactionUsecase)
-
-	router.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
-	router.POST("/transactions", transactionController.CreateTransaction)
-	router.GET("/transactions", transactionController.GetTransactions)
-	router.GET("/transactions/:transactionId", transactionController.GetTransactionsById)
-	router.DELETE("/transactions/:transactionId", transactionController.DeleteTransaction)
-	router.Run() // listens on 0.0.0.0:8080 by default
+	defer dbConnection.Close()
+	if err := db.Migrate(dbConnection); err != nil {
+		log.Fatal(err)
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           NewHandler(dbConnection),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	log.Printf("FinanceFlow disponível na porta %s", port)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }
