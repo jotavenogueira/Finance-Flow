@@ -78,7 +78,7 @@ Transação inexistente ou de outra pessoa: 404. Exclusão concluída: 204.
 ## Verificar
 
 ```powershell
-go test ./...
+go test -tags=nomsgpack ./...
 docker compose config --quiet
 ```
 
@@ -87,3 +87,56 @@ com nome iniciado por `financeflow_test_` e a variável `FINANCEFLOW_TEST_DSN` c
 sua URL de conexão. Sem essa variável, o teste é pulado. Ele verifica duas contas,
 isolamento, categoria de outra pessoa, senha com hash, logout, expiração, proteção
 de origem e preservação de um registro legado de teste.
+
+## Dashboard financeiro
+
+A visão geral inclui receitas, despesas e saldo das movimentações filtradas.
+É um saldo do período: não representa um saldo bancário importado ou uma
+projeção de caixa. Os totais são calculados em centavos.
+
+- Filtros combinados por mês, seis meses até o mês escolhido, todo o histórico,
+  tipo, categoria e busca por descrição/categoria (sem diferenciar acentos).
+- Gráfico diário para um mês; mensal para seis meses ou todo o histórico.
+- Distribuição das despesas por categoria e tabela acessível dos valores.
+- Resumo, gráficos e lista usam o mesmo conjunto de movimentações.
+- Limpar filtros retorna ao mês atual. Todo o histórico inclui lançamentos
+  futuros, caso existam. Nenhum dado de demonstração é incluído.
+- Cálculos no navegador com as transações já fornecidas pela API; sem migração
+  de banco, bibliotecas de gráficos ou chamadas externas adicionais.
+
+Testes do dashboard (Node.js 24+):
+
+```sh
+node tests/dashboard.test.cjs
+cd tests
+npm install
+npm test
+```
+
+O teste de interface usa jsdom com API simulada; não substitui a verificação
+visual em um navegador nem o teste de integração com PostgreSQL.
+
+### Referência visual
+
+Arquivo Figma `NcpgwmCyjuciAT6qpvRNjh`, quadro Dashboard 1 / Dark mode
+`3899:125939`, localizado na página Start Here. O link original apontava
+para a capa do kit. A referência foi consultada pelo navegador autenticado.
+
+Especificações confirmadas na interface do Figma:
+- Fonte Neue Montreal (o próprio Figma a sinaliza como ausente).
+- Header 1: 32/36; Header 3: 20/130%; Body: 15/24; Caption: 12/20.
+- Fundo principal escuro Background/Surface/primary: #010101.
+- Espaçamento do quadro: 24 px; cantos externos: 20 px.
+
+A interface é uma adaptação para finanças pessoais, não uma reprodução
+exata do quadro. A fonte é a primeira opção da família CSS, mas seus arquivos
+não estão incluídos: sem Neue Montreal instalada, o navegador usa a fonte
+alternativa. Para garantir a mesma fonte em todos os dispositivos, ainda
+é necessário fornecer os arquivos webfont apropriados.
+
+O build Docker e os testes Go usam `nomsgpack`, pois os endpoints usam JSON.
+Essa opção é documentada pelo Gin:
+https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-tags
+
+Validação: testes de cálculos e interface simulada, testes Go com nomsgpack
+e prévia visual com dados fictícios. O teste com PostgreSQL não foi executado.

@@ -48,6 +48,7 @@
     $('transaction-form').reset();
     $('transaction-date').value = localToday();
     renderCategories();
+    resetFilters();
   }
 
   async function api(path, options = {}) {
@@ -123,6 +124,11 @@
   }
 
   function renderCategories() {
+    const filter = $('filter-category');
+    const selected = filter.value;
+    filter.replaceChildren(new Option('Todas as categorias', ''));
+    for (const category of state.categories) filter.append(new Option(category.name, String(category.id)));
+    if (state.categories.some((category) => String(category.id) === selected)) filter.value = selected;
     const list = $('category-list');
     list.replaceChildren();
     for (const category of state.categories) {
@@ -151,6 +157,122 @@
     $('category-hint').textContent = state.categories.length ? 'Somente as categorias da sua conta aparecem aqui.' : 'Use o formulário acima para criar sua primeira categoria.';
   }
 
+  function filters() {
+    return { period: $('filter-period').value, month: $('filter-month').value || localToday().slice(0, 7),
+      type: $('filter-type').value, category: $('filter-category').value, search: $('filter-search').value };
+  }
+
+  function resetFilters() {
+    $('filter-period').value = 'month';
+    $('filter-month').value = localToday().slice(0, 7);
+    $('filter-type').value = '';
+    $('filter-category').value = '';
+    $('filter-search').value = '';
+    state.pendingDelete = null;
+    $('transaction-detail').hidden = true;
+    state.detailId = null;
+    renderTransactions();
+  }
+
+  function periodLabel(key) {
+    if (key.length === 10) return formatDate(key);
+    return new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(`${key}-01T12:00:00Z`));
+  }
+
+  function renderDashboard(transactions) {
+    const selected = filters();
+    const result = FinanceDashboard.summarize(transactions, selected);
+    $('summary-income').textContent = currency.format(result.income / 100);
+    $('summary-expense').textContent = currency.format(result.expense / 100);
+    $('summary-balance').textContent = currency.format(result.balance / 100);
+    $('summary-balance').classList.toggle('negative-balance', result.balance < 0);
+    $('filter-month').disabled = selected.period === 'all';
+    $('month-help').textContent = selected.period === 'six' ? 'Inclui o mês de referência e os cinco anteriores.' : selected.period === 'all' ? 'Todos os meses cadastrados estão incluídos.' : 'Selecione o mês que deseja analisar.';
+    const period = selected.period === 'all' ? 'Todo o histórico' : selected.period === 'six'
+      ? `${periodLabel(FinanceDashboard.shiftMonth(selected.month, -5))} a ${periodLabel(selected.month)}` : periodLabel(selected.month);
+    $('filter-context').textContent = `${period} · ${result.count} de ${state.transactions.length} movimentações. Resumo, gráficos e lista usam os mesmos filtros.`;
+    $('evolution-heading').textContent = selected.period === 'month' ? 'Evolução diária' : 'Evolução mensal';
+    $('evolution-empty').hidden = result.count > 0;
+    $('evolution-chart').hidden = result.count === 0;
+    $('evolution-details').hidden = result.count === 0;
+    renderEvolution(result.timeline, selected.period === 'month');
+    $('breakdown-total').textContent = result.expense ? `${currency.format(result.expense / 100)} em despesas filtradas.` : 'Distribuição das despesas filtradas.';
+    $('breakdown-empty').hidden = result.expense > 0;
+    const breakdown = $('category-breakdown');
+    breakdown.replaceChildren();
+    for (const category of result.categories) {
+      const item = document.createElement('li');
+      const heading = document.createElement('div');
+      const name = document.createElement('span');
+      const amount = document.createElement('strong');
+      name.textContent = category.name;
+      amount.textContent = currency.format(category.amount / 100);
+      heading.append(name, amount);
+      const bar = document.createElement('progress');
+      bar.max = result.expense; bar.value = category.amount;
+      bar.setAttribute('aria-label', `${category.name}: ${(100 * category.amount / result.expense).toFixed(1)}% das despesas`);
+      const caption = document.createElement('small');
+      caption.textContent = `${(100 * category.amount / result.expense).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% · ${category.count} ${category.count === 1 ? 'despesa' : 'despesas'}`;
+      item.append(heading, bar, caption); breakdown.append(item);
+    }
+    $('history-empty-heading').textContent = state.transactions.length ? 'Nenhuma movimentação encontrada' : 'Seu histórico começa aqui';
+    $('history-empty-text').textContent = state.transactions.length ? 'Tente outro período ou limpe os filtros para encontrar suas movimentações.' : 'Crie uma categoria e registre sua primeira receita ou despesa.';
+  }
+
+  function renderEvolution(points, daily) {
+    const container = $('evolution-chart'); container.replaceChildren();
+    const tbody = $('evolution-table'); tbody.replaceChildren();
+    const svgElement = (tag, attrs = {}, content) => {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, value);
+      if (content !== undefined) element.textContent = content;
+      return element;
+    };
+    const width = Math.max(620, points.length * (daily ? 17 : 76) + 100);
+    const height = 238, left = 92, right = 16, top = 18, bottom = 198;
+    const step = (width - left - right) / Math.max(points.length, 1);
+    const maximum = Math.max(100, ...points.map((point) => Math.max(point.income, point.expense)));
+    const svg = svgElement('svg', { viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-labelledby': 'evolution-svg-title evolution-svg-desc' });
+    svg.append(svgElement('title', { id: 'evolution-svg-title' }, daily ? 'Receitas e despesas por dia' : 'Receitas e despesas por mês'));
+    svg.append(svgElement('desc', { id: 'evolution-svg-desc' }, 'Barras em pares representam receitas e despesas. Os valores exatos estão na tabela abaixo.'));
+    for (const fraction of [0, 0.5, 1]) {
+      const y = bottom - (bottom - top) * fraction;
+      svg.append(svgElement('line', { x1: left, x2: width - right, y1: y, y2: y, class: 'chart-grid-line' }));
+      svg.append(svgElement('text', { x: left - 8, y: y + 4, 'text-anchor': 'end', class: 'chart-axis-label' }, new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 }).format(maximum * fraction / 100)));
+    }
+    svg.append(svgElement('text', { x: 10, y: 12, class: 'chart-axis-label' }, 'R$'));
+    points.forEach((point, index) => {
+      const center = left + step * (index + 0.5);
+      const barWidth = Math.min(18, step * 0.32);
+      for (const [type, offset] of [['income', -barWidth - 1], ['expense', 1]]) {
+        const barHeight = (point[type] / maximum) * (bottom - top);
+        const bar = svgElement('rect', { x: center + offset, y: bottom - barHeight, width: barWidth, height: barHeight, rx: 2, class: `chart-bar-${type}` });
+        bar.append(svgElement('title', {}, `${periodLabel(point.key)} · ${type === 'income' ? 'Receitas' : 'Despesas'}: ${currency.format(point[type] / 100)}`));
+        svg.append(bar);
+      }
+      if (!daily || index % 3 === 0 || index === points.length - 1) svg.append(svgElement('text', { x: center, y: 220, 'text-anchor': 'middle', class: 'chart-axis-label' }, daily ? point.key.slice(8) : periodLabel(point.key)));
+      const row = document.createElement('tr');
+      for (const [i, value] of [periodLabel(point.key), currency.format(point.income / 100), currency.format(point.expense / 100), currency.format((point.income - point.expense) / 100)].entries()) {
+        const cell = document.createElement(i ? 'td' : 'th');
+        if (!i) cell.scope = 'row';
+        cell.textContent = value; row.append(cell);
+      }
+      tbody.append(row);
+    });
+    container.append(svg);
+  }
+
+  for (const id of ['filter-period', 'filter-month', 'filter-type', 'filter-category', 'filter-search']) {
+    $(id).addEventListener(id === 'filter-search' ? 'input' : 'change', () => {
+      if (id === 'filter-month' && !/^\d{4}-\d{2}$/.test($(id).value)) $(id).value = localToday().slice(0, 7);
+      state.pendingDelete = null;
+      state.detailId = null;
+      $('transaction-detail').hidden = true;
+      renderTransactions();
+    });
+  }
+  $('reset-filters').addEventListener('click', resetFilters);
+
   function actionButton(label, className, action, id, description) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -165,10 +287,12 @@
   function renderTransactions() {
     const list = $('transaction-list');
     list.replaceChildren();
-    const count = state.transactions.length;
-    $('transaction-count').textContent = count === 0 ? 'Nenhuma transação cadastrada.' : `${count} ${count === 1 ? 'transação cadastrada' : 'transações cadastradas'}.`;
+    const visible = FinanceDashboard.filterTransactions(state.transactions, filters());
+    renderDashboard(visible);
+    const count = visible.length;
+    $('transaction-count').textContent = state.transactions.length ? `${count} de ${state.transactions.length} movimentações nos filtros atuais.` : 'Nenhuma transação cadastrada.';
     $('transactions-empty').hidden = count > 0;
-    for (const transaction of state.transactions) {
+    for (const transaction of visible) {
       const item = document.createElement('li');
       item.className = 'transaction-item';
       item.dataset.transactionId = String(transaction.id);
@@ -230,6 +354,8 @@
     $('initial-loading').hidden = true;
     $('auth-panel').hidden = true;
     $('app-panel').hidden = false;
+    resetFilters();
+    for (const id of ['summary-balance', 'summary-income', 'summary-expense']) $(id).textContent = '—';
     $('user-name').textContent = user.name;
     $('user-email').textContent = user.email;
     $('transaction-date').value = localToday();
@@ -355,7 +481,10 @@
       form.reset();
       $('transaction-date').value = localToday();
       await loadWorkspace();
-      if (generation === state.generation) notify('Transação cadastrada.');
+      if (generation === state.generation) {
+        const shown = FinanceDashboard.filterTransactions(state.transactions, filters()).some((item) => item.description === body.description && String(item.date).slice(0, 10) === body.date && Number(item.amount) === body.amount);
+        notify(shown ? 'Transação cadastrada.' : 'Transação cadastrada. Ela está fora dos filtros atuais; ajuste o período ou limpe os filtros para vê-la.');
+      }
     } catch (error) { showRequestError(error); }
     finally {
       setFormBusy(form, false);
@@ -435,6 +564,7 @@
 
   async function restoreSession() {
     setAuthMode('login');
+    resetFilters();
     $('transaction-date').value = localToday();
     try {
       const data = await api('/auth/me', { silentUnauthorized: true });
