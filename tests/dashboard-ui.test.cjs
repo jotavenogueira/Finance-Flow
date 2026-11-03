@@ -1,0 +1,70 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { JSDOM } = require('jsdom');
+const root = path.join(__dirname, '..');
+const now = new Date();
+const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+const categories = [{id:1,name:'Trabalho'},{id:2,name:'Moradia'},{id:3,name:'<img src=x onerror=alert(1)>'}];
+let rows = [
+ {id:1,description:'Salário',amount:5000,type:'income',category_id:1,category:'Trabalho',date:`${month}-01`},
+ {id:2,description:'Aluguel',amount:1500,type:'expense',category_id:2,category:'Moradia',date:`${month}-02`},
+];
+const response = (data,status=200) => ({ok:status<400,status,text:async()=>status===204?'':JSON.stringify(data)});
+const dom = new JSDOM(fs.readFileSync(path.join(root,'web/index.html'),'utf8'),{url:'http://localhost:8081',runScripts:'outside-only'});
+const win = dom.window;
+win.TextEncoder = TextEncoder;
+win.fetch = async (url, options={}) => {
+ if(url==='/auth/me') return response({user:{id:1,name:'Teste',email:'teste@example.com'}});
+ if(url==='/categories') return response(categories);
+ if(url==='/transactions') return response(rows);
+ if(url==='/transactions/2' && options.method==='DELETE') {rows=rows.filter(t=>t.id!==2);return response(null,204);}
+ if(url==='/auth/logout') return response(null,204);
+ throw Error(`Unexpected request: ${url}`);
+};
+win.eval(fs.readFileSync(path.join(root,'web/dashboard.js'),'utf8'));
+win.eval(fs.readFileSync(path.join(root,'web/app.js'),'utf8'));
+const $ = id => win.document.getElementById(id);
+const tick = () => new Promise(resolve=>setImmediate(resolve));
+const change = (id,value,event='change') => {$(id).value=value;$(id).dispatchEvent(new win.Event(event,{bubbles:true}));};
+const money = value => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(value);
+(async()=>{
+ for(let i=0;i<10 && $('refresh-button').disabled;i++) await tick();
+ await tick();
+ assert.equal($('app-panel').hidden,false);
+ assert.equal($('summary-balance').textContent,money(3500));
+ assert.equal($('transaction-list').children.length,2);
+ assert.ok($('evolution-chart').querySelector('svg'));
+ assert.equal($('category-breakdown').children.length,1);
+ assert.equal(win.document.querySelectorAll('img').length,0,'category is rendered as plain text');
+ change('filter-type','expense');
+ assert.equal($('summary-balance').textContent,money(-1500));
+ assert.equal($('transaction-list').children.length,1);
+ change('filter-search','nao existe','input');
+ assert.equal($('summary-balance').textContent,money(0));
+ assert.equal($('transactions-empty').hidden,false);
+ assert.equal($('evolution-chart').hidden,true);
+ assert.equal($('category-breakdown').children.length,0);
+ $('reset-filters').click();
+ assert.equal($('summary-balance').textContent,money(3500));
+ change('filter-category','1');
+ assert.equal($('summary-income').textContent,money(5000));
+ assert.equal($('summary-expense').textContent,money(0));
+ $('reset-filters').click();
+ $('transaction-list').querySelector('[data-action="ask-delete"][data-id="2"]').click();
+ $('transaction-list').querySelector('[data-action="confirm-delete"][data-id="2"]').click();
+ await tick();await tick();
+ assert.equal($('summary-balance').textContent,money(5000));
+ assert.equal($('category-breakdown').children.length,0);
+ change('filter-period','all');
+ assert.equal($('filter-month').disabled,true);
+ $('logout-button').click();
+ await tick();await tick();
+ assert.equal($('app-panel').hidden,true);
+ assert.equal($('auth-panel').hidden,false);
+ assert.equal($('transaction-list').children.length,0);
+ assert.equal($('summary-income').textContent,money(0),'logout clears financial totals');
+ console.log('Dashboard UI: sessão, filtros, gráficos, exclusão, conteúdo seguro e limpeza no logout passaram.');
+ dom.window.close();
+})().catch(error=>{console.error(error);dom.window.close();process.exitCode=1;});
