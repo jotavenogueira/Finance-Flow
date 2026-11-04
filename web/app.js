@@ -6,6 +6,44 @@
   const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   let activeRequests = 0;
 
+  function readAuthResult() {
+    const url = new URL(window.location.href);
+    const errorCode = url.searchParams.get('auth_error');
+    const successCode = url.searchParams.get('auth_success');
+    const errors = {
+      google_denied: 'O acesso com Google foi cancelado. Você pode tentar novamente ou entrar com e-mail e senha.',
+      google_failed: 'Não foi possível entrar com Google. Tente novamente.',
+      google_expired: 'A tentativa de acesso com Google expirou. Tente novamente.',
+      google_account_exists: 'Já existe uma conta com esse e-mail. Entre com sua senha e use Conectar Google para vincular sua conta.',
+      google_account_conflict: 'Esta conta Google já está conectada a outra conta FinanceFlow.',
+      google_email_mismatch: 'Escolha a conta Google com o mesmo e-mail da sua conta FinanceFlow.',
+    };
+    const hasError = url.searchParams.has('auth_error');
+    if (hasError || url.searchParams.has('auth_success')) {
+      url.searchParams.delete('auth_error');
+      url.searchParams.delete('auth_success');
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+    if (hasError) {
+      const message = Object.prototype.hasOwnProperty.call(errors, errorCode) ? errors[errorCode] : errors.google_failed;
+      return { message, error: true };
+    }
+    return successCode === 'google_linked' ? { message: 'Sua conta Google foi conectada. Você já pode usá-la para entrar.', error: false } : null;
+  }
+
+  const authResult = readAuthResult();
+
+  async function loadAuthProviders() {
+    try {
+      const providers = await api('/auth/providers', { silentUnauthorized: true });
+      const enabled = providers?.google === true;
+      $('google-auth').hidden = !enabled;
+      $('google-link-form').hidden = !enabled;
+    } catch {
+      // A indisponibilidade do provedor não impede o acesso por e-mail e senha.
+    }
+  }
+
   class ApiError extends Error {
     constructor(message, status) { super(message); this.status = status; }
   }
@@ -84,11 +122,13 @@
   function requestStarted() {
     activeRequests++;
     $('logout-button').disabled = true;
+    $('google-link-button').disabled = true;
   }
 
   function requestFinished() {
     activeRequests = Math.max(0, activeRequests - 1);
     $('logout-button').disabled = activeRequests > 0;
+    $('google-link-button').disabled = activeRequests > 0;
   }
 
   function setFormBusy(form, busy) {
@@ -399,6 +439,7 @@
     setFormBusy(form, true);
     $('login-tab').disabled = true;
     $('register-tab').disabled = true;
+    $('google-auth-button').disabled = true;
     $('auth-submit').textContent = register ? 'Criando conta…' : 'Entrando…';
     try {
       const data = await api(register ? '/auth/register' : '/auth/login', { method: 'POST', body, authRequest: true });
@@ -411,6 +452,7 @@
       setFormBusy(form, false);
       $('login-tab').disabled = false;
       $('register-tab').disabled = false;
+      $('google-auth-button').disabled = false;
       $('auth-submit').textContent = state.authMode === 'register' ? 'Criar conta' : 'Entrar';
     }
   });
@@ -572,7 +614,11 @@
     } catch (error) {
       if (!state.user) showLoggedOut();
       if (error.status !== 401) showRequestError(error);
-    } finally { $('initial-loading').hidden = true; }
+    } finally {
+      $('initial-loading').hidden = true;
+      if (authResult && (authResult.error || state.user)) notify(authResult.message, authResult.error);
+    }
   }
+  loadAuthProviders();
   restoreSession();
 })();

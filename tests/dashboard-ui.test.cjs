@@ -16,6 +16,7 @@ const dom = new JSDOM(fs.readFileSync(path.join(root,'web/index.html'),'utf8'),{
 const win = dom.window;
 win.TextEncoder = TextEncoder;
 win.fetch = async (url, options={}) => {
+ if(url==='/auth/providers') return response({google:true});
  if(url==='/auth/me') return response({user:{id:1,name:'Teste',email:'teste@example.com'}});
  if(url==='/categories') return response(categories);
  if(url==='/transactions') return response(rows);
@@ -37,7 +38,7 @@ const money = value => new Intl.NumberFormat('pt-BR',{style:'currency',currency:
  assert.equal($('transaction-list').children.length,2);
  assert.ok($('evolution-chart').querySelector('svg'));
  assert.equal($('category-breakdown').children.length,1);
- assert.equal(win.document.querySelectorAll('img').length,0,'category is rendered as plain text');
+ assert.equal(win.document.querySelectorAll('#category-list img, #transaction-list img').length,0,'category is rendered as plain text');
  change('filter-type','expense');
  assert.equal($('summary-balance').textContent,money(-1500));
  assert.equal($('transaction-list').children.length,1);

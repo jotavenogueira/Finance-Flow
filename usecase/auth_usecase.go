@@ -153,3 +153,67 @@ func hashSessionToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
 }
+
+// GoogleAuthStore resolves verified Google identities without automatically
+// linking an existing password account merely because its email matches.
+type GoogleAuthStore interface {
+	ResolveGoogleUser(context.Context, model.GoogleIdentity) (model.User, error)
+	LinkGoogleUser(context.Context, int, model.GoogleIdentity) error
+}
+
+func (u AuthUsecase) GoogleLogin(ctx context.Context, identity model.GoogleIdentity) (model.User, Session, error) {
+	identity, err := normalizeGoogleIdentity(identity)
+	if err != nil {
+		return model.User{}, Session{}, err
+	}
+	store, ok := u.repository.(GoogleAuthStore)
+	if !ok {
+		return model.User{}, Session{}, fmt.Errorf("Google identity storage is unavailable")
+	}
+	user, err := store.ResolveGoogleUser(ctx, identity)
+	if err != nil {
+		return model.User{}, Session{}, err
+	}
+	session, err := u.createSession(ctx, user.ID)
+	if err != nil {
+		return model.User{}, Session{}, err
+	}
+	user.PasswordHash = ""
+	return user, session, nil
+}
+
+func (u AuthUsecase) LinkGoogle(ctx context.Context, userID int, identity model.GoogleIdentity) error {
+	if userID < 1 {
+		return model.ErrInvalidCredentials
+	}
+	identity, err := normalizeGoogleIdentity(identity)
+	if err != nil {
+		return err
+	}
+	store, ok := u.repository.(GoogleAuthStore)
+	if !ok {
+		return fmt.Errorf("Google identity storage is unavailable")
+	}
+	return store.LinkGoogleUser(ctx, userID, identity)
+}
+
+func normalizeGoogleIdentity(identity model.GoogleIdentity) (model.GoogleIdentity, error) {
+	if identity.Subject == "" || len(identity.Subject) > 255 || strings.TrimSpace(identity.Subject) != identity.Subject {
+		return model.GoogleIdentity{}, fmt.Errorf("%w: identificador Google inválido", model.ErrInvalidInput)
+	}
+	email, valid := normalizeEmail(identity.Email)
+	if !valid {
+		return model.GoogleIdentity{}, fmt.Errorf("%w: e-mail Google inválido", model.ErrInvalidInput)
+	}
+	identity.Email = email
+	name := strings.TrimSpace(identity.Name)
+	if name == "" {
+		name = strings.SplitN(email, "@", 2)[0]
+	}
+	runes := []rune(name)
+	if len(runes) > 100 {
+		name = string(runes[:100])
+	}
+	identity.Name = name
+	return identity, nil
+}

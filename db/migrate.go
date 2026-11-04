@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,19 +29,38 @@ func Migrate(connection *sql.DB) error {
 	if _, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); err != nil {
 		return err
 	}
-	var applied bool
-	if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 1)").Scan(&applied); err != nil {
+	// ReadDir returns filenames in lexical order; migration files use a
+	// zero-padded numeric prefix so later versions run after earlier versions.
+	entries, err := migrations.ReadDir("migrations")
+	if err != nil {
 		return err
 	}
-	if !applied {
-		script, err := migrations.ReadFile("migrations/001_users_categories.sql")
+	seen := make(map[int]bool)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		prefix, _, found := strings.Cut(entry.Name(), "_")
+		version, parseErr := strconv.Atoi(prefix)
+		if !found || parseErr != nil || version < 1 || seen[version] {
+			return fmt.Errorf("nome de migração inválido ou repetido: %s", entry.Name())
+		}
+		seen[version] = true
+		var applied bool
+		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", version).Scan(&applied); err != nil {
+			return err
+		}
+		if applied {
+			continue
+		}
+		script, err := migrations.ReadFile("migrations/" + entry.Name())
 		if err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, string(script)); err != nil {
-			return fmt.Errorf("aplicar migração 1: %w", err)
+			return fmt.Errorf("aplicar migração %d: %w", version, err)
 		}
-		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version) VALUES (1)"); err != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version) VALUES ($1)", version); err != nil {
 			return err
 		}
 	}

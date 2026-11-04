@@ -8,6 +8,9 @@ services:
       GIN_MODE: release
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       PORT: "8080"
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-}
       # Entre containers, use o nome do servico e a porta interna.
       DB_HOST: go_db
       DB_PORT: "5432"

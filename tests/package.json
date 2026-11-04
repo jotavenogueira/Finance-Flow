@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "test": "node dashboard.test.cjs && node dashboard-ui.test.cjs"
+    "test": "node dashboard.test.cjs && node dashboard-ui.test.cjs && node google-auth-ui.test.cjs"
   },
   "devDependencies": {
     "jsdom": "30.1.3"

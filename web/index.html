@@ -34,6 +34,12 @@
         <div id="auth-fields" role="tabpanel" aria-labelledby="login-tab">
           <h2 id="auth-heading">Bem-vindo de volta</h2>
           <p id="auth-help" class="muted">Use seu e-mail e sua senha para entrar.</p>
+          <div id="google-auth" hidden>
+            <form id="google-auth-form" action="/auth/google/start" method="post">
+              <button id="google-auth-button" class="button google-button full" type="submit"><img src="/static/google-g.png" width="20" height="20" alt="">Continuar com Google</button>
+            </form>
+            <div class="auth-divider"><span>ou use seu e-mail</span></div>
+          </div>
           <form id="auth-form">
             <div id="name-field" class="field" hidden>
               <label for="auth-name">Nome</label>
@@ -61,7 +67,12 @@
           <h1 id="workspace-heading">Visão geral</h1>
           <p class="muted"><span id="user-name"></span> <span class="separator" aria-hidden="true">·</span> <span id="user-email"></span></p>
         </div>
-        <button id="logout-button" class="button secondary" type="button">Sair da conta</button>
+        <div class="account-actions">
+          <form id="google-link-form" action="/auth/google/link/start" method="post" hidden>
+            <button id="google-link-button" class="button quiet" type="submit">Conectar Google</button>
+          </form>
+          <button id="logout-button" class="button secondary" type="button">Sair da conta</button>
+        </div>
       </div>
 
       <section class="card dashboard-filters" aria-labelledby="filters-heading">

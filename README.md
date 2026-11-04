@@ -59,7 +59,11 @@ transação à categoria de outro usuário.
 | Método | Caminho | Função |
 | --- | --- | --- |
 | POST | `/auth/register` | Cadastrar e iniciar sessão |
-| POST | `/auth/login` | Entrar |
+| POST | `/auth/login` | Entrar com e-mail e senha |
+| GET | `/auth/providers` | Consultar se o login Google está configurado |
+| POST | `/auth/google/start` | Iniciar login ou cadastro com Google |
+| GET | `/auth/google/callback` | Receber o retorno do Google |
+| POST | `/auth/google/link/start` | Conectar Google à conta autenticada |
 | GET | `/auth/me` | Consultar usuário autenticado |
 | POST | `/auth/logout` | Sair |
 | GET / POST | `/categories` | Listar / criar categorias |
@@ -162,3 +166,119 @@ conexao; o banco configurado nesta publicacao foi ligado apenas a Production.
 
 Confira na Vercel a branch de producao antes de publicar novos commits. O deploy
 deste projeto acompanha a branch main.
+
+
+## Login com Google
+
+O botão **Continuar com Google** aparece quando as três variáveis `GOOGLE_*`
+estão preenchidas e a URL de retorno é válida. O login por e-mail e senha
+continua disponível. O navegador vai até o Google e retorna ao backend; não há
+SDK do Google executando na página.
+
+### Configurar o cliente OAuth
+
+1. Abra o [Google Cloud Console](https://console.cloud.google.com/) e selecione
+   ou crie o projeto que identificará o FinanceFlow.
+2. Em **Google Auth Platform**, configure a apresentação do aplicativo em
+   **Branding** e seu público em **Audience**. Use seus dados reais de suporte.
+   Para um aplicativo externo em teste, configure os usuários de teste quando
+   exigido pelo console. A publicação para outras pessoas depende do estado e
+   das exigências de verificação apresentados pelo Google.
+3. Em **Clients**, crie um cliente do tipo **Web application**.
+4. Adicione as seguintes **Authorized redirect URIs**, exatamente como escritas:
+
+   ```text
+   http://localhost:8081/auth/google/callback
+   https://finance-flow-nogzz.vercel.app/auth/google/callback
+   ```
+
+   A porta, o protocolo e o caminho precisam coincidir. Se mudar o domínio ou a
+   porta da aplicação, atualize o cadastro do cliente e a variável do ambiente.
+   Este fluxo usa redirecionamento pelo servidor; não precisa configurar origens
+   JavaScript para um SDK no navegador.
+5. Guarde o **Client ID** e o **Client secret** em local privado. Use os valores
+   apenas no ambiente em que a API executa.
+
+O procedimento e as regras de retorno estão na
+[documentação OAuth para aplicações web do Google](https://developers.google.com/identity/protocols/oauth2/web-server).
+O FinanceFlow pede somente `openid`, `email` e `profile` para identificar a pessoa;
+não solicita acesso ao Gmail, Drive ou acesso offline.
+
+### Ambiente local e Vercel
+
+No `.env` local, acrescente seus valores reais sem sobrescrever as configurações
+do banco. Os valores abaixo são apenas indicações do que preencher:
+
+```dotenv
+GOOGLE_CLIENT_ID=seu_client_id
+GOOGLE_CLIENT_SECRET=seu_client_secret
+GOOGLE_REDIRECT_URL=http://localhost:8081/auth/google/callback
+```
+
+Na Vercel, abra o projeto FinanceFlow em **Settings → Environment Variables** e
+cadastre as mesmas três variáveis para **Production**, usando este retorno:
+
+```text
+GOOGLE_REDIRECT_URL=https://finance-flow-nogzz.vercel.app/auth/google/callback
+```
+
+Marque o segredo como sensível quando essa opção estiver disponível e faça um
+novo deploy depois de salvar as variáveis. O segredo fica no ambiente da API;
+não o coloque no HTML, no JavaScript, no `vercel.json`, no Dockerfile ou no Git.
+O `.env` já é ignorado pelo Git e pelo contexto da imagem Docker. O arquivo
+`.env.example` deve continuar apenas com campos vazios ou exemplos públicos.
+
+Com Google habilitado, a página inicial acessada por outro alias redireciona
+para a origem configurada em `GOOGLE_REDIRECT_URL`. Isso mantém o início do login
+e o retorno no mesmo domínio, onde o cookie pode ser validado. Na produção,
+compartilhe o endereço `https://finance-flow-nogzz.vercel.app/`.
+
+Após alterar o código ou a configuração local, recrie a API:
+
+```powershell
+docker compose up -d --build api
+```
+
+Esse comando preserva o volume do PostgreSQL. A migração adiciona os vínculos
+Google e permite usuários sem senha local; as contas e transações existentes
+permanecem no banco.
+
+### Contas novas e contas existentes
+
+- **Conta nova:** Continuar com Google cria o usuário e inicia uma sessão do
+  FinanceFlow. A conta criada por esse caminho não recebe uma senha local.
+- **Conta já cadastrada com senha:** entre primeiro com e-mail e senha e clique
+  em **Conectar Google**. Escolha a conta Google com o mesmo e-mail. Depois do
+  vínculo, os dois métodos acessam o mesmo usuário e suas transações.
+- Um e-mail igual não provoca vínculo automático entre contas. A identidade
+  Google é associada ao identificador estável da conta (`sub`).
+- **Sair da conta** encerra a sessão do FinanceFlow; não desconecta sua conta
+  Google do navegador.
+
+O backend valida o token de identidade, incluindo assinatura, emissor,
+destinatário, validade, nonce e e-mail verificado. A tentativa de login usa
+`state`, PKCE e um registro temporário no banco vinculado ao navegador, com
+validade de dez minutos e consumo único. O callback cria a sessão local já usada
+pela aplicação; tokens do Google não são entregues ao JavaScript nem persistidos
+como credenciais para outras APIs.
+
+### Conferir a integração
+
+```powershell
+go test -p 1 -tags=nomsgpack ./...
+cd tests
+npm install
+npm test
+```
+
+Os testes Go cobrem regras de vínculo e validação do fluxo OAuth; a validação de
+tokens utiliza um provedor simulado com assinatura, sem entrar em uma conta
+Google real. O teste `google-auth-ui.test.cjs` verifica o botão, o retorno,
+mensagens seguras e a continuidade do login por senha quando Google está
+indisponível. Os testes de integração com PostgreSQL continuam exigindo
+`FINANCEFLOW_TEST_DSN` apontando para um banco descartável `financeflow_test_*`.
+
+Depois de configurar o cliente e as variáveis, teste também no navegador com
+contas Google reais: criar uma conta, sair, entrar novamente, conectar uma conta
+existente e cancelar o consentimento. Passar nos testes locais não confirma a
+configuração do cliente no console nem a publicação das variáveis na Vercel.
