@@ -5,7 +5,6 @@ services:
       dockerfile: Dockerfile.yml
     restart: unless-stopped
     environment:
-      GIN_MODE: release
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       PORT: "8080"
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -24,6 +23,7 @@ services:
       go_db:
         condition: service_healthy
 
+  # O nome go_db é mantido para reutilizar o container e o volume existentes.
   go_db:
     container_name: go_db
     image: postgres:18.6
