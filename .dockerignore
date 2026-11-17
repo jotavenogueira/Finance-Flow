@@ -4,6 +4,7 @@
 *.exe
 *.test
 coverage.out
+target/
 
 node_modules/
 

@@ -1,21 +1,21 @@
-# Etapa 1: baixar as dependencias e compilar a API para Linux.
-FROM golang:1.27.3-alpine3.24 AS build
+# Etapa 1: baixar as dependencias e gerar o jar da API.
+FROM maven:3.9-eclipse-temurin-21 AS build
 
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
+COPY pom.xml ./
+RUN mvn -B -q dependency:go-offline
 
-COPY . .
-# A API usa JSON; MsgPack fica fora da compilação para reduzir dependências.
-RUN CGO_ENABLED=0 GOMAXPROCS=1 GOMEMLIMIT=384MiB go build -p 1 -tags=nomsgpack -trimpath -o /out/financeflow .
+COPY src ./src
+COPY web ./web
+# Os testes rodam fora da imagem (alguns exigem um PostgreSQL descartavel).
+RUN mvn -B -q -DskipTests package
 
-# Etapa 2: executar apenas o programa compilado.
-FROM scratch
+# Etapa 2: executar apenas o jar com o runtime Java.
+FROM eclipse-temurin:21-jre-alpine
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /out/financeflow /app/financeflow
+COPY --from=build /src/target/financeflow.jar /app/financeflow.jar
 
 WORKDIR /app
 USER 65532:65532
 EXPOSE 8080
-ENTRYPOINT ["/app/financeflow"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/financeflow.jar"]

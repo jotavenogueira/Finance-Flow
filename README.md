@@ -1,7 +1,7 @@
 # FinanceFlow — protótipo com usuários
 
-API em Go/Gin, PostgreSQL e uma tela web simples para testar cadastro, login,
-categorias próprias e transações. A interface usa HTML, CSS e JavaScript sem
+API em Java 21/Spring Boot, PostgreSQL e uma tela web simples para testar cadastro,
+login, categorias próprias e transações. A interface usa HTML, CSS e JavaScript sem
 dependências; pode ser substituída depois pelo frontend em TypeScript.
 
 ## Executar
@@ -23,13 +23,24 @@ Abra **http://localhost:8081**. Crie uma conta, cadastre uma categoria e registr
 uma transação. Use Sair para testar outra conta. O cadastro já inicia a sessão.
 Não existem contas ou senhas prontas no protótipo.
 
-Se mudar o código Go ou a tela, execute novamente `docker compose up -d --build api`.
+Se mudar o código Java ou a tela, execute novamente `docker compose up -d --build api`.
 Para ver os logs: `docker compose logs -f api`.
+
+Para executar sem Docker, use um JDK 21 e o Maven Wrapper incluído. A aplicação lê
+o `.env` da pasta atual; as variáveis já definidas no ambiente têm prioridade:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
 
 ## Como as camadas se conectam
 
+O código fica em `src/main/java/com/financeflow`, com um pacote por camada:
+
 1. **Controller:** recebe HTTP/JSON, identifica o usuário da sessão e responde
-   com o status adequado.
+   com o status adequado. `HttpProtectionFilter` aplica os cabeçalhos de
+   segurança (inclusive a CSP), o limite de 1 MiB e o bloqueio de origem cruzada;
+   `AuthInterceptor` protege as rotas que exigem sessão.
 2. **Use case:** valida regras, como tipo de transação, valor, data e campos do
    cadastro. É onde a senha é transformada em hash.
 3. **Repository:** executa SQL. Toda consulta de categorias e transações recebe
@@ -43,7 +54,10 @@ Em uma publicação com HTTPS, configure `SESSION_COOKIE_SECURE=true`.
 
 ## Banco e dados anteriores
 
-Na inicialização, `db.Migrate` aplica as migrações SQL embutidas no programa.
+Na inicialização, `DatabaseMigrator` aplica as migrações SQL de
+`src/main/resources/db/migrations`, embutidas no jar, antes de o servidor aceitar
+requisições. Bancos criados pela versão em Go continuam compatíveis: a tabela,
+as senhas bcrypt e as sessões existentes são lidas do mesmo jeito.
 A tabela `schema_migrations` impede que uma versão seja aplicada duas vezes.
 Uma transação de banco garante que falhas não deixem a migração pela metade.
 
@@ -82,15 +96,24 @@ Transação inexistente ou de outra pessoa: 404. Exclusão concluída: 204.
 ## Verificar
 
 ```powershell
-go test -tags=nomsgpack ./...
+.\mvnw.cmd test
 docker compose config --quiet
 ```
 
-O teste de integração `TestUserIsolationFlow` exige um banco **descartável e vazio**
-com nome iniciado por `financeflow_test_` e a variável `FINANCEFLOW_TEST_DSN` com
-sua URL de conexão. Sem essa variável, o teste é pulado. Ele verifica duas contas,
-isolamento, categoria de outra pessoa, senha com hash, logout, expiração, proteção
-de origem e preservação de um registro legado de teste.
+Sem JDK instalado, os mesmos testes rodam em um container Maven:
+
+```powershell
+docker run --rm -v "${PWD}:/src" -w /src maven:3.9-eclipse-temurin-21 mvn -B test
+```
+
+Os testes de integração (`UserIsolationIntegrationTest` e
+`GoogleRepositoryIntegrationTest`) exigem um banco **descartável** com nome
+iniciado por `financeflow_test_` e a variável `FINANCEFLOW_TEST_DSN` com sua URL
+de conexão (por exemplo `postgres://postgres:senha@localhost:5432/financeflow_test_local?sslmode=disable`).
+Cada teste cria e remove um schema próprio. Sem essa variável, eles são pulados.
+Verificam duas contas, isolamento, categoria de outra pessoa, senha com hash,
+logout, expiração, proteção de origem, preservação de um registro legado de teste
+e as regras de vínculo e de desafio do login Google.
 
 ## Dashboard financeiro
 
@@ -138,34 +161,27 @@ não estão incluídos: sem Neue Montreal instalada, o navegador usa a fonte
 alternativa. Para garantir a mesma fonte em todos os dispositivos, ainda
 é necessário fornecer os arquivos webfont apropriados.
 
-O build Docker e os testes Go usam `nomsgpack`, pois os endpoints usam JSON.
-Essa opção é documentada pelo Gin:
-https://github.com/gin-gonic/gin/blob/master/docs/doc.md#build-tags
+## Hospedagem
 
-Validação: testes de cálculos e interface simulada, testes Go com nomsgpack
-e prévia visual com dados fictícios. O teste com PostgreSQL não foi executado.
-## Hospedagem na Vercel
+A Vercel não tem runtime Java, então o preset Go e o `vercel.json` foram
+removidos junto com o backend em Go. A API agora é publicada como container: o
+`Dockerfile.yml` gera a imagem usada pelo Docker Compose e serve para qualquer
+provedor que execute containers. Configure no provedor `PORT` (quando ele não
+definir), `SESSION_COOKIE_SECURE=true`, `DATABASE_URL` e as três `GOOGLE_*`.
+Mantenha a API na mesma região do PostgreSQL online.
 
-O preset Go executa este mesmo servidor e os arquivos da interface continuam
-embutidos no binario. O arquivo `vercel.json` configura o preset, a compilacao
-JSON (`nomsgpack`), cookies HTTPS e a regiao de Sao Paulo (`gru1`). O PostgreSQL
-online deve ficar na mesma regiao. O Docker Compose continua sendo o ambiente local.
+`DATABASE_URL` (por exemplo, a fornecida pelo Neon) tem prioridade sobre as seis
+variáveis `DB_*`. Quando não existe, a conexão local continua usando o `.env`
+atual. Não coloque a URL real no Git nem em arquivos públicos.
 
-A integracao Neon fornece `DATABASE_URL` ao projeto como segredo. Essa URL tem
-prioridade sobre as seis variaveis `DB_*`. Quando nao existe, a conexao local
-continua usando o `.env` atual. Nao coloque a URL real no Git nem em arquivos publicos.
+O driver PostgreSQL JDBC aceita `channel_binding=require` fornecido pelo Neon.
+A API mantém esse requisito e usa `sslmode=verify-full`, validando o certificado
+(com as autoridades confiáveis da JVM) e o nome do servidor. O pool de cada
+instância é limitado a cinco conexões, com duas ociosas, para uso junto ao
+pooler do provedor.
 
-O driver pgx aceita a autenticacao `channel_binding=require` fornecida pelo Neon.
-A API mantem esse requisito e usa `sslmode=verify-full`, validando o certificado
-e o nome do servidor. O pool de cada instancia e limitado a cinco conexoes, com
-duas ociosas, para uso junto ao pooler do provedor.
-
-No primeiro acesso, as migracoes preparam o banco online vazio. Dados do Docker
-local nao sao enviados automaticamente. Cada ambiente deve ter sua propria
-conexao; o banco configurado nesta publicacao foi ligado apenas a Production.
-
-Confira na Vercel a branch de producao antes de publicar novos commits. O deploy
-deste projeto acompanha a branch main.
+No primeiro acesso, as migrações preparam o banco online vazio. Dados do Docker
+local não são enviados automaticamente. Cada ambiente deve ter sua própria conexão.
 
 
 ## Login com Google
@@ -204,7 +220,7 @@ O procedimento e as regras de retorno estão na
 O FinanceFlow pede somente `openid`, `email` e `profile` para identificar a pessoa;
 não solicita acesso ao Gmail, Drive ou acesso offline.
 
-### Ambiente local e Vercel
+### Ambiente local e produção
 
 No `.env` local, acrescente seus valores reais sem sobrescrever as configurações
 do banco. Os valores abaixo são apenas indicações do que preencher:
@@ -215,23 +231,25 @@ GOOGLE_CLIENT_SECRET=seu_client_secret
 GOOGLE_REDIRECT_URL=http://localhost:8081/auth/google/callback
 ```
 
-Na Vercel, abra o projeto FinanceFlow em **Settings → Environment Variables** e
-cadastre as mesmas três variáveis para **Production**, usando este retorno:
+No provedor de hospedagem, cadastre as mesmas três variáveis no ambiente de
+produção, usando o retorno do domínio público. Enquanto o domínio for o atual:
 
 ```text
 GOOGLE_REDIRECT_URL=https://finance-flow-nogzz.vercel.app/auth/google/callback
 ```
 
-Marque o segredo como sensível quando essa opção estiver disponível e faça um
-novo deploy depois de salvar as variáveis. O segredo fica no ambiente da API;
-não o coloque no HTML, no JavaScript, no `vercel.json`, no Dockerfile ou no Git.
+Se a API passar a outro domínio, atualize essa variável e as **Authorized
+redirect URIs** do cliente OAuth. Marque o segredo como sensível quando essa
+opção estiver disponível e publique de novo depois de salvar as variáveis. O
+segredo fica no ambiente da API; não o coloque no HTML, no JavaScript, no
+Dockerfile ou no Git.
 O `.env` já é ignorado pelo Git e pelo contexto da imagem Docker. O arquivo
 `.env.example` deve continuar apenas com campos vazios ou exemplos públicos.
 
 Com Google habilitado, a página inicial acessada por outro alias redireciona
 para a origem configurada em `GOOGLE_REDIRECT_URL`. Isso mantém o início do login
 e o retorno no mesmo domínio, onde o cookie pode ser validado. Na produção,
-compartilhe o endereço `https://finance-flow-nogzz.vercel.app/`.
+compartilhe o endereço configurado em `GOOGLE_REDIRECT_URL`.
 
 Após alterar o código ou a configuração local, recrie a API:
 
@@ -265,14 +283,14 @@ como credenciais para outras APIs.
 ### Conferir a integração
 
 ```powershell
-go test -p 1 -tags=nomsgpack ./...
+.\mvnw.cmd test
 cd tests
 npm install
 npm test
 ```
 
-Os testes Go cobrem regras de vínculo e validação do fluxo OAuth; a validação de
-tokens utiliza um provedor simulado com assinatura, sem entrar em uma conta
+Os testes Java cobrem regras de vínculo e validação do fluxo OAuth; a validação de
+tokens utiliza um provedor local com tokens assinados, sem entrar em uma conta
 Google real. O teste `google-auth-ui.test.cjs` verifica o botão, o retorno,
 mensagens seguras e a continuidade do login por senha quando Google está
 indisponível. Os testes de integração com PostgreSQL continuam exigindo
@@ -281,4 +299,4 @@ indisponível. Os testes de integração com PostgreSQL continuam exigindo
 Depois de configurar o cliente e as variáveis, teste também no navegador com
 contas Google reais: criar uma conta, sair, entrar novamente, conectar uma conta
 existente e cancelar o consentimento. Passar nos testes locais não confirma a
-configuração do cliente no console nem a publicação das variáveis na Vercel.
+configuração do cliente no console nem a publicação das variáveis no provedor.

@@ -3,10 +3,11 @@
 .env.*
 !.env.example
 
-# Arquivos gerados pelo Go no desenvolvimento
+# Arquivos gerados no desenvolvimento
 *.exe
 *.test
 coverage.out
+target/
 
 node_modules/
 
